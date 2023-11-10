@@ -69,15 +69,32 @@ class AdaptiveLoss(FairseqCriterion):
 
         loss = net_output[0].new(1 if reduce else bsz).zero_()
 
+        # sum reduction is bad for fp16 if loss is huge. fairseq tries to use sum reduction
+        # and scale gradients by batch_size later, which is correct when using options like
+        # gradient accumulation.
+
+        # instead, if we assume gradient accumulation will never be used, we can use a mean
+        # reduction to fit the gradient inside a fp16 and remove the re-scaling that occurs
+        # later.
         for i in range(len(target)):
+            # target[0].size() --> batch_size, but target[1] and target[2] are smaller.
+            # thus, we want to use a mean reduction for target[0], and divide a sum reduction
+            # for target[1] and target[2] by the batch_size. 
             if target[i] is not None:
                 assert target[i].min() >= 0 and target[i].max() <= logits[i].size(1)
-                loss += F.cross_entropy(
+
+                reduction = "none"
+                divisor = 1 if i == 0 else bsz
+                if reduce:
+                    reduction = "mean" if i == 0 else "sum"
+
+                loss_i = F.cross_entropy(
                     logits[i],
                     target[i],
                     ignore_index=self.padding_idx,
-                    reduction="sum" if reduce else "none",
+                    reduction=reduction
                 )
+                loss += (loss_i / divisor)
 
         orig = utils.strip_pad(orig_target, self.padding_idx)
         ntokens = orig.numel()
@@ -88,6 +105,7 @@ class AdaptiveLoss(FairseqCriterion):
             "nsentences": nsentences,
             "sample_size": sample_size,
         }
+
         return loss, sample_size, logging_output
 
     @staticmethod
@@ -99,9 +117,14 @@ class AdaptiveLoss(FairseqCriterion):
             sum(log.get("sample_size", 0) for log in logging_outputs)
         )
 
+        # because we're using a mean reduction, we don't need to divide by sample_size
         metrics.log_scalar(
-            "loss", loss_sum / sample_size / math.log(2), sample_size, round=3
+            "loss", loss_sum / math.log(2), sample_size, round=3
         )
+        # metrics.log_scalar(
+        #     "loss", loss_sum / sample_size / math.log(2), sample_size, round=3
+        # )
+
         if sample_size != ntokens:
             metrics.log_scalar(
                 "nll_loss", loss_sum / ntokens / math.log(2), ntokens, round=3

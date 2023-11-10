@@ -943,13 +943,19 @@ class Trainer(object):
                     if not self.cfg.optimization.use_bmuf or self._sync_stats()
                     else 1
                 )
-                self.optimizer.multiply_grads(numer / (sample_size or 1.0))
+                # since the adaptive_loss is using an effective mean reduction, just multiply by numer
+                self.optimizer.multiply_grads(numer)
+                
+                # self.optimizer.multiply_grads(numer / (sample_size or 1.0))
                 # Note: (sample_size or 1.0) handles the case of a zero gradient, in a
                 # way that avoids CPU/device transfers in case sample_size is a GPU or
                 # TPU object. The assumption is that the gradient itself is also 0.
 
             with torch.autograd.profiler.record_function("clip-grads"):
                 # clip grads
+                # in a fp16 model, the gradient is not clipped after this step. why?
+                # A: the _multiply_factor is changed to the correct clipping value here, but isn't applied until self.task.optimizer_step() 
+                #    syncs the fp16 gradients to fp32. then once in fp32, they are clipped and rescaled, then converted back to fp16. 
                 grad_norm = self.clip_grad_norm(self.cfg.optimization.clip_norm)
 
             # check that grad norms are consistent across workers
