@@ -119,7 +119,7 @@ class AdaptiveLoss(FairseqCriterion):
 
         # because we're using a mean reduction, we don't need to divide by sample_size
         metrics.log_scalar(
-            "loss", loss_sum / math.log(2), sample_size, round=3
+            "loss", loss_sum / 3 / math.log(2), sample_size, round=3
         )
         # metrics.log_scalar(
         #     "loss", loss_sum / sample_size / math.log(2), sample_size, round=3

@@ -944,7 +944,7 @@ class Trainer(object):
                     else 1
                 )
                 # since the adaptive_loss is using an effective mean reduction, just multiply by numer
-                self.optimizer.multiply_grads(numer)
+                # self.optimizer.multiply_grads(numer)
                 
                 # self.optimizer.multiply_grads(numer / (sample_size or 1.0))
                 # Note: (sample_size or 1.0) handles the case of a zero gradient, in a
