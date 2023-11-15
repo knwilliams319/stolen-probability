@@ -219,7 +219,16 @@ class TransformerLanguageModelConfig(FairseqDataclass):
         },
     )
 
+    # ALiBi arguments
+    use_alibi_attention: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "if True, disables positional embeddings and uses ALiBi-modified attention"
+        },
+    )
+    
     # options from other parts of the config
+    max_tokens: int = II("task.max_tokens")
     add_bos_token: bool = II("task.add_bos_token")
     tokens_per_sample: int = II("task.tokens_per_sample")
     max_target_positions: Optional[int] = II("task.max_target_positions")
@@ -360,6 +369,10 @@ def base_lm_architecture(args):
     args.no_token_positional_embeddings = safe_getattr(
         args, "no_token_positional_embeddings", False
     )
+    args.use_alibi_attention = safe_getattr(args, "use_alibi_attention", False)
+    if args.use_alibi_attention:
+        # Turn off positional embeddings if ALiBi attention is active
+        args.no_token_positional_embeddings = True
     args.share_decoder_input_output_embed = safe_getattr(
         args, "share_decoder_input_output_embed", False
     )
