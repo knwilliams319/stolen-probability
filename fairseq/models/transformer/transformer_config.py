@@ -230,6 +230,26 @@ class TransformerConfig(FairseqDataclass):
         default=False,
         metadata={"help": "make the layernorm exportable with torchscript."},
     )
+    
+    # Config for ALiBi (https://arxiv.org/abs/2108.12409)
+    use_alibi_attention: bool = field(
+        default=False,
+        metadata={
+            "help": "if True, disables positional embeddings and uses ALiBi-modified attention"
+        },
+    )
+    tokens_per_sample: int = field(
+        default=DEFAULT_MAX_TARGET_POSITIONS,
+        metadata={
+            "help": "same as task.tokens_per_sample, used in ALiBi attention"
+        }
+    )
+    max_tokens: int = field(
+        default=DEFAULT_MAX_TARGET_POSITIONS,
+        metadata={
+            "help": "same as task.max_tokens, used in ALiBi attention"
+        }
+    )
 
     # copied from transformer_lm but expected in transformer_decoder:
     no_decoder_final_norm: bool = field(
