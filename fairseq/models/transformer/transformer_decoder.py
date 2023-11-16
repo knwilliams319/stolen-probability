@@ -315,9 +315,9 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             padding_mask = encoder_out["encoder_padding_mask"][0]
 
         # embed positions
-        assert not self.embed_positions and self.alibi != None
         positions = None
         if self.embed_positions is not None:
+            assert self.alibi == None
             positions = self.embed_positions(
                 prev_output_tokens, incremental_state=incremental_state
             )
@@ -346,17 +346,12 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         x = self.dropout_module(x)
 
-        #We move the mask construction here because its slightly more efficient.
+        # For ALiBi, we can precompute the mask before we transpose
         if incremental_state is None and not full_context_alignment:
-             if self.alibi != None:
+            if self.alibi is not None:
                 self_attn_mask = self.buffered_future_mask_alibi(x)
-             else:
-                self_attn_mask = self.buffered_future_mask(x)
-        else:
-             self_attn_mask = None
 
-        # B x T x C -> T x B x C
-        x = x.transpose(0, 1)
+        x = x.transpose(0, 1) # B x T x C -> T x B x C
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
@@ -366,6 +361,12 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
         for idx, layer in enumerate(self.layers):
+            if incremental_state is None and not full_context_alignment:
+                if self.alibi is None:
+                    self_attn_mask = self.buffered_future_mask(x)
+            else:
+                self_attn_mask = None
+        
             x, layer_attn, _ = layer(
                 x,
                 enc,
