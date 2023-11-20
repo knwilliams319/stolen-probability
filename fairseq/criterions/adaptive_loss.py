@@ -158,11 +158,11 @@ class AdaptiveLoss(FairseqCriterion):
                 sum(log.get("ntokens", 0) for log in logging_outputs)
             )
             loss_sum = utils.item(
-                sum(log.get("loss", 0) * (total_tokens/log.get("ntokens", 0)) for log in logging_outputs)
+                sum(log.get("loss", 0) * (log.get("ntokens", 0)/total_tokens) for log in logging_outputs)
             )
             
             metrics.log_scalar(
-                "loss", loss_sum / math.log(2), sample_size, round=3
+                "loss", loss_sum / math.log(2), 1, round=3
             )
             # TODO: meters["loss"] should only have one item, so that using .avg doesn't change output
             metrics.log_derived(
@@ -198,4 +198,4 @@ class AdaptiveLoss(FairseqCriterion):
         across workers prior to calling `reduce_metrics`. Setting this
         to True will improve distributed training speed.
         """
-        return adaptive_loss_use_mean_reduction
+        return not adaptive_loss_use_mean_reduction
