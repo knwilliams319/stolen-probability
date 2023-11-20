@@ -608,6 +608,13 @@ class OptimizationConfig(FairseqDataclass):
             " (default is to normalize by number of tokens)"
         },
     )
+    use_mean_reduction: bool = field(
+        default=False,
+        metadata={
+            "help": "use a mean reduction inside of the specified criterion "
+            "(default is sum reduction)"
+        }
+    )
     update_freq: List[int] = field(
         default_factory=lambda: [1],
         metadata={"help": "update parameters every N_i batches, when in epoch i"},
