@@ -226,6 +226,29 @@ class TransformerLanguageModelConfig(FairseqDataclass):
             "help": "if True, disables positional embeddings and uses ALiBi-modified attention"
         },
     )
+
+    # Euclidean Attention arguments
+    use_euclidean_attention: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "if True, uses Euclidean distance instead of dot-product inside softmax"
+        }
+    )
+
+    # Temperature scaling arguments
+    learned_temperature: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "if True, temperature parameter(s) are learned to augment softmax instead\
+                     of the default temperature of 1."
+        }
+    )
+    per_token_temperature: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "if True, a temperature parameter is learned for each position of the context"
+        }
+    )
     
     # options from other parts of the config
     max_tokens: int = II("task.max_tokens")
@@ -377,6 +400,14 @@ def base_lm_architecture(args):
         args, "share_decoder_input_output_embed", False
     )
     args.character_embeddings = safe_getattr(args, "character_embeddings", False)
+
+    args.use_euclidean_attention = safe_getattr(args, "use_euclidean_attention", False)
+
+    # If per_token_temperature is passed, assert that learned_temperature was, too
+    args.learned_temperature = safe_getattr(args, "learned_temperature", False)
+    args.per_token_temperature = safe_getattr(args, "per_token_temperature", False)
+    if args.per_token_temperature:
+        assert args.learned_temperature, "To learn a per-token temperature, please pass --learned-temperature to the training command"
 
     args.decoder_output_dim = safe_getattr(
         args, "decoder_output_dim", args.decoder_embed_dim
