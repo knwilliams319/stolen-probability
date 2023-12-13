@@ -147,16 +147,17 @@ class MultiheadAttention(FairseqIncrementalDecoder):
         # Euclidean Attention config setup
         self.use_euclidean = use_euclidean
         self.learned_temperature = learned_temperature
-        self.temperature = Parameter(torch.Tensor(1), requires_grad=False)
+        self.temperatures = Parameter(torch.Tensor(1), requires_grad=False)
         if self.learned_temperature:
             if per_token_temperature:
-                self.temperature = Parameter(torch.Tensor(embed_dim), requires_grad=True)
+                # TODO: this should be context_length, not embed_dim, right?
+                self.temperatures = Parameter(torch.Tensor(embed_dim), requires_grad=True)
             else:
-                self.temperature = Parameter(torch.Tensor(1), requires_grad=True)
+                self.temperatures = Parameter(torch.Tensor(1), requires_grad=True)
 
         self.add_zero_attn = add_zero_attn
         self.beam_size = 1
-        self.reset_parameters() # TODO: do I need to add any logic to this function? 
+        self.reset_parameters() # NOTE: I added initialization for self.temperatures here
 
         if self.use_xformers:
             xformers_att_config["dropout"] = xformers_att_config.get("dropout", dropout)
@@ -201,9 +202,9 @@ class MultiheadAttention(FairseqIncrementalDecoder):
 
         # Init the temperature param
         if self.learned_temperature:
-            nn.init.uniform_(self.temperature) # draw from [0, 1]
+            nn.init.uniform_(self.temperatures) # draw from [0, 1] since temperatures should be positive
         else:
-            nn.init.constant_(self.temperature, 1.0) # use temperature=1 (same as normal softmax)
+            nn.init.constant_(self.temperatures, 1.0) # use temperature=1 (same as normal softmax)
 
     def _get_reserve_head_index(self, num_heads_to_keep: int):
         k_proj_heads_norm = []
@@ -261,6 +262,7 @@ class MultiheadAttention(FairseqIncrementalDecoder):
         return reserve_head_index
 
     def _adaptive_prune_heads(self, reserve_head_index: List[Tuple[int, int]]):
+        # TODO: do I need to change this function to use adaptive softmax?
         new_q_weight = []
         new_q_bias = []
         new_k_weight = []
@@ -1199,22 +1201,43 @@ class MultiheadAttention(FairseqIncrementalDecoder):
         #
         # (deep breath) calculate attention and out projection
         #
-
         B, Nt, E = q.shape
-        q_scaled = q / math.sqrt(E)
-        if attn_mask is not None:
-            attn_output_weights = torch.baddbmm(attn_mask, q_scaled, k.transpose(-2, -1))
+        if self.use_euclidean: # TODO: finish implementing Euclidean attention by changing the section below
+            # TODO: Should we add any scaling to q to reduce the variance of Euclidean distance?
+            # q_scaled = q / math.sqrt(E)
+            if attn_mask is not None:
+                # TODO: What are the shapes below? I should test that torch.cdist() works well on these sizes
+                # attn_mask.shape = torch.Size([1, 512, 512])
+                # q_scaled.shape = torch.Size([512, 512, 128])
+                # k.shape = torch.Size([512, 512, 128])
+                # attn_output_weights = torch.size([512, 512, 512])
+                attn_output_weights = torch.baddbmm(attn_mask, q_scaled, k.transpose(-2, -1))
+            else:
+                attn_output_weights = torch.bmm(q_scaled, k.transpose(-2, -1))
+            attn_output_weights = self._temperature_softmax(attn_output_weights)  # F.softmax(attn_output_weights, dim=-1) 
+            if dropout_p > 0.0:
+                attn_output_weights = F.dropout(attn_output_weights, p=dropout_p)
+
+            attn_output = torch.bmm(attn_output_weights, v)
+
+            attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len * bsz, embed_dim)
+            attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
+            attn_output = attn_output.view(tgt_len, bsz, attn_output.size(1))
         else:
-            attn_output_weights = torch.bmm(q_scaled, k.transpose(-2, -1))
-        attn_output_weights = F.softmax(attn_output_weights, dim=-1)
-        if dropout_p > 0.0:
-            attn_output_weights = F.dropout(attn_output_weights, p=dropout_p)
+            q_scaled = q / math.sqrt(E)
+            if attn_mask is not None:
+                attn_output_weights = torch.baddbmm(attn_mask, q_scaled, k.transpose(-2, -1))
+            else:
+                attn_output_weights = torch.bmm(q_scaled, k.transpose(-2, -1))
+            attn_output_weights = self._temperature_softmax(attn_output_weights)  # F.softmax(attn_output_weights, dim=-1)
+            if dropout_p > 0.0:
+                attn_output_weights = F.dropout(attn_output_weights, p=dropout_p)
 
-        attn_output = torch.bmm(attn_output_weights, v)
+            attn_output = torch.bmm(attn_output_weights, v)
 
-        attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len * bsz, embed_dim)
-        attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
-        attn_output = attn_output.view(tgt_len, bsz, attn_output.size(1))
+            attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len * bsz, embed_dim)
+            attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
+            attn_output = attn_output.view(tgt_len, bsz, attn_output.size(1))
 
         if need_weights:
             # optionally average attention weights over heads
@@ -1232,3 +1255,34 @@ class MultiheadAttention(FairseqIncrementalDecoder):
                 # squeeze the output if input was unbatched
                 attn_output = attn_output.squeeze(1)
             return attn_output, None
+        
+    def _temperature_softmax(self, x, dim=-1):
+        """
+        Computes softmax along dimension `dim` of `input`. Applies `self.temperature` position-wise to scale
+        `input` prior to exponentiation. 
+
+        If self.temperature = torch.tensor([1]), this function is no different than F.softmax(input, dim=dim).
+        """
+        # temperatures should have shape (1,) or (context_length,)
+        assert len(self.temperatures.shape) == 1
+
+        # diagonalize the temperatures
+        # TODO: Using a nn.Linear instead of a Parameter would prevent having to explicitly call
+        #       .to(device) and set the dtype here. This would likely be faster, too.
+        # LINK: https://stackoverflow.com/questions/70314058/how-to-implement-a-diagonal-data-for-a-linear-layer-in-pytorch 
+        if self.temperatures.shape[0] == 1:
+            eye = torch.eye(x.shape[1], 
+                            device='cuda', 
+                            dtype=self.temperatures.dtype)
+            temperatures = eye * self.temperatures
+        else:
+            assert self.temperatures.shape[0] == x.shape[1]
+            temperatures = torch.diag_embed(self.temperatures)
+
+        # now calculate softmax
+        # TODO: this function might need to use self.use_euclidean to have different behavior. specifically, we might need to find the min
+        #       and exp_x_shifted = torch.exp(x + x_min)
+        x = x @ temperatures  # while debugging, this line causes issues. x should look the same before/after, but instead we see nans in X after multiplying
+        x_max = torch.max(x, axis=dim, keepdims=True).values
+        exp_x_shifted = torch.exp(x - x_max)
+        return exp_x_shifted / torch.sum(exp_x_shifted, axis=dim, keepdims=True)
