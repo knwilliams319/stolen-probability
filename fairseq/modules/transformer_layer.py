@@ -136,6 +136,7 @@ class TransformerEncoderLayerBase(nn.Module):
         return MultiheadAttention(
             embed_dim,
             cfg.encoder.attention_heads,
+            cfg.max_source_positions,
             dropout=cfg.attention_dropout,
             self_attention=True,
             q_noise=self.quant_noise,
@@ -356,6 +357,7 @@ class TransformerDecoderLayerBase(nn.Module):
         return MultiheadAttention(
             embed_dim,
             cfg.decoder.attention_heads,
+            cfg.max_source_positions,
             dropout=cfg.attention_dropout,
             add_bias_kv=add_bias_kv,
             add_zero_attn=add_zero_attn,
@@ -372,6 +374,7 @@ class TransformerDecoderLayerBase(nn.Module):
         return MultiheadAttention(
             embed_dim,
             cfg.decoder.attention_heads,
+            cfg.max_source_positions,
             kdim=cfg.encoder.embed_dim,
             vdim=cfg.encoder.embed_dim,
             dropout=cfg.attention_dropout,
