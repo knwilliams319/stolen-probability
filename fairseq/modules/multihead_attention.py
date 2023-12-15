@@ -1204,13 +1204,13 @@ class MultiheadAttention(FairseqIncrementalDecoder):
         if self.use_euclidean: 
             # q_scaled = q / math.sqrt(E)  # TODO: Should we add any scaling to q to reduce the variance of Euclidean distance?
 
-            attn_output_weights = -torch.cdist(q, k)  # negative batched pairwise L2-norm b/w embeddings in Q, K
+            # Calculate batched pairwise negative squared distance between embeddings in Q, K
+            Q_sq = torch.sum(torch.square(q), axis=2).unsqueeze(2)
+            K_sq = torch.sum(torch.square(k), axis=2).unsqueeze(1)
+            QK_dot = torch.bmm(q, k.mT)  # .mT returns a view equivalent to k.transpose(-2, -1)
+            attn_output_weights = -(Q_sq - 2*QK_dot + K_sq)
+
             if attn_mask is not None:
-                # NOTE: Shapes below are:
-                # attn_mask.shape = torch.Size([1, seq_len, seq_len])
-                # q_scaled.shape = torch.Size([seq_len, seq_len, embed_dim // n_heads])
-                # k.shape = torch.Size([seq_len, seq_len, embed_dim // n_heads])
-                # attn_output_weights = torch.size([seq_len, seq_len, seq_len])
                 attn_output_weights += attn_mask  # add -infs so softmax ignores those positions
             
             attn_output_weights = self._temperature_softmax(attn_output_weights)  # F.softmax(attn_output_weights, dim=-1) 
