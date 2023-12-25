@@ -201,10 +201,7 @@ class MultiheadAttention(FairseqIncrementalDecoder):
             nn.init.xavier_normal_(self.bias_v)
 
         # Init the temperature param
-        if self.learned_temperature:
-            nn.init.uniform_(self.temperatures) # draw from [0, 1] since temperatures should be positive
-        else:
-            nn.init.constant_(self.temperatures, 1.0) # use temperature=1 (same as normal softmax)
+        nn.init.constant_(self.temperatures, 1.0) # use temperature=1 (same as normal softmax)
 
     def _get_reserve_head_index(self, num_heads_to_keep: int):
         k_proj_heads_norm = []
