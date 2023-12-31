@@ -162,7 +162,7 @@ class AdaptiveLoss(FairseqCriterion):
             )
             
             metrics.log_scalar(
-                "loss", loss_sum / math.log(2), 1, round=3
+                "loss", loss_sum / math.log(2), total_tokens, round=4
             )
             metrics.log_derived(
                 "ppl", lambda meters: utils.get_perplexity(meters["loss"].avg)

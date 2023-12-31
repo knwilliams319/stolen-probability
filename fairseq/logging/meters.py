@@ -105,6 +105,63 @@ class AverageMeter(Meter):
         if self.round is not None and val is not None:
             val = safe_round(val, self.round)
         return val
+    
+class LossMeter(Meter):
+    """Computes and stores the average and current value of loss"""
+
+    def __init__(self, round: Optional[int] = None):
+        self.round = round
+        self.reset()
+
+    def reset(self):
+        self.val = None        # most recent update
+        self.batch_size = None # size of a normal update
+        self.count = 0          # size of all updates
+        self.sum = 0          # loss over all batches
+
+    def update(self, val, n=1):
+        if self.batch_size is None:
+            self.batch_size = n
+        else:
+            # if self.count == 1, we can make self.batch_size larger one time
+            if self.count == 1 and n > self.batch_size:
+                self.sum *= (self.batch_size / n)
+                self.count *= (self.batch_size / n)
+                self.batch_size = n
+            assert n <= self.batch_size
+
+        if val is not None:
+            self.val = val
+            if n > 0:
+                self.sum += val * (n / self.batch_size)
+                self.count += (n / self.batch_size)
+
+    def state_dict(self):
+        return {
+            "val": self.val,
+            "batch_size": self.batch_size,
+            "count": self.count,
+            "sum": self.sum,
+            "round": self.round,
+        }
+
+    def load_state_dict(self, state_dict):
+        self.val = state_dict["val"]
+        self.batch_size = state_dict["batch_size"]
+        self.count = state_dict["count"]
+        self.sum = state_dict["sum"]
+        self.round = state_dict.get("round", None)
+
+    @property
+    def avg(self):
+        return self.sum / self.count if self.count > 0 else self.val
+
+    @property
+    def smoothed_value(self) -> float:
+        val = self.avg
+        if self.round is not None and val is not None:
+            val = safe_round(val, self.round)
+        return val
 
 
 class SumMeter(Meter):
