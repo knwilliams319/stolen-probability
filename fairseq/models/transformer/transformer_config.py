@@ -251,6 +251,29 @@ class TransformerConfig(FairseqDataclass):
         }
     )
 
+    # Euclidean Attention arguments
+    use_euclidean_attention: bool = field(
+        default=False,
+        metadata={
+            "help": "if True, uses Euclidean distance instead of dot-product inside softmax"
+        }
+    )
+
+    # Temperature scaling arguments
+    learned_temperature: bool = field(
+        default=False,
+        metadata={
+            "help": "if True, temperature parameter(s) are learned to augment softmax instead\
+                     of the default temperature of 1."
+        }
+    )
+    per_token_temperature: bool = field(
+        default=False,
+        metadata={
+            "help": "if True, a temperature parameter is learned for each position of the context"
+        }
+    )
+
     # copied from transformer_lm but expected in transformer_decoder:
     no_decoder_final_norm: bool = field(
         default=False,

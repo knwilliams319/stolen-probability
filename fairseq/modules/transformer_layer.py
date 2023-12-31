@@ -136,11 +136,15 @@ class TransformerEncoderLayerBase(nn.Module):
         return MultiheadAttention(
             embed_dim,
             cfg.encoder.attention_heads,
+            cfg.max_source_positions,
             dropout=cfg.attention_dropout,
             self_attention=True,
             q_noise=self.quant_noise,
             qn_block_size=self.quant_noise_block_size,
             xformers_att_config=cfg.encoder.xformers_att_config,
+            use_euclidean=cfg.use_euclidean_attention,
+            learned_temperature=cfg.learned_temperature,
+            per_token_temperature=cfg.per_token_temperature,
         )
 
     def residual_connection(self, x, residual):
@@ -353,6 +357,7 @@ class TransformerDecoderLayerBase(nn.Module):
         return MultiheadAttention(
             embed_dim,
             cfg.decoder.attention_heads,
+            cfg.max_source_positions,
             dropout=cfg.attention_dropout,
             add_bias_kv=add_bias_kv,
             add_zero_attn=add_zero_attn,
@@ -360,12 +365,16 @@ class TransformerDecoderLayerBase(nn.Module):
             q_noise=self.quant_noise,
             qn_block_size=self.quant_noise_block_size,
             xformers_att_config=cfg.decoder.xformers_att_config,
+            use_euclidean=cfg.use_euclidean_attention,
+            learned_temperature=cfg.learned_temperature,
+            per_token_temperature=cfg.per_token_temperature,
         )
 
     def build_encoder_attention(self, embed_dim, cfg):
         return MultiheadAttention(
             embed_dim,
             cfg.decoder.attention_heads,
+            cfg.max_source_positions,
             kdim=cfg.encoder.embed_dim,
             vdim=cfg.encoder.embed_dim,
             dropout=cfg.attention_dropout,
@@ -373,6 +382,9 @@ class TransformerDecoderLayerBase(nn.Module):
             q_noise=self.quant_noise,
             qn_block_size=self.quant_noise_block_size,
             xformers_att_config=cfg.encoder.xformers_att_config,
+            use_euclidean=cfg.use_euclidean_attention,
+            learned_temperature=cfg.learned_temperature,
+            per_token_temperature=cfg.per_token_temperature,
         )
 
     def prepare_for_onnx_export_(self):
