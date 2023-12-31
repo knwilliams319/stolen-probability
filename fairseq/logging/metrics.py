@@ -127,7 +127,10 @@ def log_scalar(
     """
     for agg in get_active_aggregators():
         if key not in agg:
-            agg.add_meter(key, AverageMeter(round=round), priority)
+            if key != 'loss':
+                agg.add_meter(key, AverageMeter(round=round), priority)
+            else:
+                agg.add_meter(key, LossMeter(round=round), priority)
         agg[key].update(value, weight)
 
 

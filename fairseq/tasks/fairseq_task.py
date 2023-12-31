@@ -181,6 +181,7 @@ class FairseqTask(object):
         Returns:
             np.array: array of filtered sample indices
         """
+        # max_positions = 1024
         indices, ignored = dataset.filter_indices_by_size(indices, max_positions)
         if len(ignored) > 0:
             if not ignore_invalid_inputs:
@@ -529,10 +530,7 @@ class FairseqTask(object):
         model.set_num_updates(update_num)
         with torch.autograd.profiler.record_function("forward"):
             with torch.cuda.amp.autocast(enabled=(isinstance(optimizer, AMPOptimizer))):
-                if criterion.different_forward_for_train_test():
-                    loss, sample_size, logging_output = criterion(model, sample, True)
-                else:
-                    loss, sample_size, logging_output = criterion(model, sample)
+                loss, sample_size, logging_output = criterion(model, sample)
         if ignore_grad:
             loss *= 0
         with torch.autograd.profiler.record_function("backward"):
@@ -542,10 +540,7 @@ class FairseqTask(object):
     def valid_step(self, sample, model, criterion):
         model.eval()
         with torch.no_grad():
-            if criterion.different_forward_for_train_test():
-                loss, sample_size, logging_output = criterion(model, sample, False)
-            else:
-                loss, sample_size, logging_output = criterion(model, sample)
+            loss, sample_size, logging_output = criterion(model, sample)
         return loss, sample_size, logging_output
 
     def optimizer_step(self, optimizer, model, update_num):

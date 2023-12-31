@@ -103,16 +103,6 @@ class FairseqCriterion(_Loss):
         """
         return False    
 
-    def different_forward_for_train_test(self) -> bool:
-        """
-        Whether the `forward` method should be invoked differently for
-        training vs. validation data. If True, a criterion's forward()
-        method should accept a third positional warg train_sample which indicates
-        if the passed sample came from the training set. This is False
-        for all criterion except AdaptiveLoss. 
-        """
-        return False
-
 
 class LegacyFairseqCriterion(FairseqCriterion):
     def __init__(self, args, task):
