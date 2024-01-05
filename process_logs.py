@@ -5,14 +5,14 @@ post-processing them. Find how to use this script at the command line via:
 
 python process_logs.py -h
 '''
-import pathlib
+from pathlib import Path
 import argparse
 from sys import argv
 
 # SECTION: Initialize the argparse object and process arguments
 parser = argparse.ArgumentParser(description='Clean up a logfile by removing duplicate lines')
 parser.add_argument('filepath', 
-                    type=pathlib.Path,
+                    type=Path,
                     help='Path to the logfile to be processed')
 parser.add_argument('-d', '--delete', 
                     action='store_true',
@@ -28,7 +28,7 @@ should_delete = args.delete
 if not log_path.exists():
     raise ValueError(f'The path {log_path} does not exist!')
 
-output_path = pathlib.Path(log_path.parent, f'processed_{log_path.name}')  # write non-duplicates to new file
+output_path = Path(log_path.parent, f'processed_{log_path.name}')  # write non-duplicates to new file
 seen_lines = set()  # used to track duplicates
 
 start_after_line = 'begin dry-run validation on "test" subset\n' # until we see this line, we will not remove duplicates
@@ -41,7 +41,9 @@ with output_path.open(mode='w') as out_file:
                      if line not in seen_lines:
                           out_file.write(line)
                           seen_lines.add(line)
-                     if line.startswith('end of epoch'):
+                     if line.startswith('end of epoch'): 
+                          # we will never see a duplicate line after this signal, so we can reset 
+                          # the seen_lines set to save memory
                           seen_lines = set()
                 else:
                      out_file.write(line)
