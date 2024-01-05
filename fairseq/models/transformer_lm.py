@@ -514,7 +514,7 @@ def transformer_lm_wiki103_256(args):
     transformer_lm_big(args)
 
 
-@register_model_architecture("transformer_lm", "transformer_lm_wiki103_256")
+@register_model_architecture("transformer_lm", "transformer_lm_wiki103_1024")
 def transformer_lm_wiki103_1024(args):
     args.decoder_layers = safe_getattr(args, "decoder_layers", 16)
     args.decoder_attention_heads = safe_getattr(args, "decoder_attention_heads", 8)
